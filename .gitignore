@@ -1,3 +1,6 @@
+# SQLite database (generated at runtime)
+march_madness.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
