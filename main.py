@@ -22,6 +22,11 @@ from march_madness.engine.bracket_engine import simulate_tournament
 def main():
     parser = argparse.ArgumentParser(description="Simulate a March Madness bracket")
     parser.add_argument("--seed", type=int, help="Random seed for reproducible results")
+    parser.add_argument(
+        "--stochastic",
+        action="store_true",
+        help="Use Monte Carlo aggregator (sample winners by probability)",
+    )
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -59,11 +64,13 @@ def main():
 
     print("March Madness Bracket Builder")
     print(f"Season: {config.SEASON}")
+    if args.stochastic:
+        print("Aggregator: Monte Carlo (stochastic)")
     if args.seed is not None:
         print(f"Random seed: {args.seed}")
 
     # Simulate
-    winners = simulate_tournament(conn, EXPERTS, weights)
+    winners = simulate_tournament(conn, EXPERTS, weights, stochastic=args.stochastic)
 
     # The last game (highest game_id) determines the champion
     champion = winners[max(winners)]

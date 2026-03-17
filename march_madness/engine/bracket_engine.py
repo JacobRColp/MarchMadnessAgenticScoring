@@ -3,7 +3,7 @@
 import sqlite3
 
 from march_madness.db import queries
-from march_madness.engine.aggregator import aggregate
+from march_madness.engine.aggregator import aggregate, aggregate_stochastic
 from march_madness.config import ROUND_NAMES, EXPERT_WEIGHTS
 
 
@@ -11,6 +11,7 @@ def simulate_tournament(
     conn: sqlite3.Connection,
     experts: list,
     weights: list[float],
+    stochastic: bool = False,
 ) -> dict:
     """Run the full tournament simulation (First Four + 6 rounds).
 
@@ -50,7 +51,8 @@ def simulate_tournament(
             results = [expert(team_a, team_b, conn) for expert in experts]
 
             # Aggregate and pick winner
-            winner_key = aggregate(results, weights)
+            agg_fn = aggregate_stochastic if stochastic else aggregate
+            winner_key = agg_fn(results, weights)
             winner = team_a if winner_key == "team_a" else team_b
             loser = team_b if winner_key == "team_a" else team_a
 
