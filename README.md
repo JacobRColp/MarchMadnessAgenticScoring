@@ -30,22 +30,13 @@ Each game flows through this pipeline: the bracket engine resolves the two teams
 
 | Expert | Weight | Purpose |
 |--------|--------|---------|
-| Seed | 15% | Historical seed-vs-seed win rates from 30+ years of NCAA data |
+| Seed | 25% | Historical seed-vs-seed win rates from 30+ years of NCAA data |
 | Efficiency | 40% | Composite of current-season offensive/defensive performance |
-| Momentum | 20% | Last 10 games: win rate, scoring trend, recent shooting |
-| Chaos | 25% | Controlled randomness to generate realistic upsets |
+| Momentum | 25% | Last 10 games: win rate, scoring trend, recent shooting |
+| Chaos | 10% | Controlled randomness to generate realistic upsets |
 
 Weights must sum to 1.0 and are configured in `march_madness/config.py`.
 
-### Why These Weights
-
-**Efficiency gets the largest share (40%)** because it is the most discriminating measure of team quality — a composite of scoring output, shooting percentages, ball security, and defense. It directly answers "how good is this team at basketball right now?"
-
-**Chaos is second (25%)** because without it, the other three experts trend heavily toward chalk (favorites always winning). Real March Madness brackets have 12-over-5 and 13-over-4 upsets every year. The chaos expert injects that variance.
-
-**Momentum (20%)** captures whether a team is peaking at the right time. Teams that are hot going into the tournament historically outperform their seed, but streaks are less reliable than season-long efficiency.
-
-**Seed is lowest (15%)** because while historically strong, it's a blunt instrument — it knows nothing about the specific teams playing this year. It serves as a tiebreaker and baseline, not a primary signal.
 
 ### Expert Details
 
