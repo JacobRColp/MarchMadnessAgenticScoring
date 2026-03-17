@@ -1,132 +1,124 @@
-"""Load 64 tournament teams and the 63-game bracket structure."""
+"""Load tournament teams from CSV and build the bracket structure.
 
+Handles 68 teams including 4 First Four play-in matchups.
+"""
+
+import csv
 import sqlite3
+from collections import defaultdict
 
-# 2025 March Madness field — 16 teams per region, (team_name, conference, seed)
-TEAMS_BY_REGION = {
-    "East": [
-        ("Duke", "ACC", 1),
-        ("Alabama", "SEC", 2),
-        ("Wisconsin", "Big Ten", 3),
-        ("Arizona", "Big 12", 4),
-        ("Oregon", "Big Ten", 5),
-        ("BYU", "Big 12", 6),
-        ("St. Mary's", "WCC", 7),
-        ("UConn", "Big East", 8),
-        ("Baylor", "Big 12", 9),
-        ("Vanderbilt", "SEC", 10),
-        ("VCU", "A-10", 11),
-        ("Liberty", "CUSA", 12),
-        ("Yale", "Ivy", 13),
-        ("Lipscomb", "ASUN", 14),
-        ("Robert Morris", "Horizon", 15),
-        ("American", "Patriot", 16),
-    ],
-    "West": [
-        ("Florida", "SEC", 1),
-        ("St. John's", "Big East", 2),
-        ("Texas Tech", "Big 12", 3),
-        ("Maryland", "Big Ten", 4),
-        ("Memphis", "AAC", 5),
-        ("Missouri", "SEC", 6),
-        ("Kansas", "Big 12", 7),
-        ("UNC", "ACC", 8),
-        ("UCF", "Big 12", 9),
-        ("Arkansas", "SEC", 10),
-        ("Drake", "MVC", 11),
-        ("Colorado St.", "MWC", 12),
-        ("Grand Canyon", "WAC", 13),
-        ("N. Kentucky", "Horizon", 14),
-        ("Omaha", "Summit", 15),
-        ("Norfolk St.", "MEAC", 16),
-    ],
-    "South": [
-        ("Auburn", "SEC", 1),
-        ("Michigan St.", "Big Ten", 2),
-        ("Iowa St.", "Big 12", 3),
-        ("Texas A&M", "SEC", 4),
-        ("Michigan", "Big Ten", 5),
-        ("Ole Miss", "SEC", 6),
-        ("Marquette", "Big East", 7),
-        ("Louisville", "ACC", 8),
-        ("Georgia", "SEC", 9),
-        ("New Mexico", "MWC", 10),
-        ("San Diego St.", "MWC", 11),
-        ("UC San Diego", "Big West", 12),
-        ("High Point", "Big South", 13),
-        ("Troy", "Sun Belt", 14),
-        ("S. Dakota St.", "Summit", 15),
-        ("Mt. St. Mary's", "MAAC", 16),
-    ],
-    "Midwest": [
-        ("Houston", "Big 12", 1),
-        ("Tennessee", "SEC", 2),
-        ("Kentucky", "SEC", 3),
-        ("Purdue", "Big Ten", 4),
-        ("Clemson", "ACC", 5),
-        ("Illinois", "Big Ten", 6),
-        ("UCLA", "Big Ten", 7),
-        ("Gonzaga", "WCC", 8),
-        ("Georgia Tech", "ACC", 9),
-        ("Creighton", "Big East", 10),
-        ("McNeese", "Southland", 11),
-        ("NC Wilmington", "CAA", 12),
-        ("Vermont", "AE", 13),
-        ("Montana", "Big Sky", 14),
-        ("Wofford", "SoCon", 15),
-        ("SIU Edwardsville", "OVC", 16),
-    ],
-}
+from march_madness import config
 
 # Standard first-round bracket pairings by seed (within each region)
 ROUND1_SEED_PAIRS = [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10), (2, 15)]
 
+# Game IDs start at 1001 to avoid collision with team_ids (1-68)
+_GAME_ID_START = 1001
+
 
 def load_teams(conn: sqlite3.Connection) -> None:
-    """Insert all 64 teams. team_id assigned sequentially by region."""
-    teams = []
+    """Read teams from CSV, detect First Four, insert all 68 teams."""
+    teams_by_region_seed = defaultdict(list)
+
+    with open(config.TEAM_SUMMARY_CSV, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            teams_by_region_seed[(row["region"], int(row["seed"]))].append(row)
+
+    # Detect First Four: any (region, seed) with 2 teams
+    first_four_keys = {
+        key for key, teams in teams_by_region_seed.items() if len(teams) == 2
+    }
+
+    # Assign team_ids sequentially, ordered by region then seed
     team_id = 1
-    for region, roster in TEAMS_BY_REGION.items():
-        for name, conf, seed in roster:
-            teams.append((team_id, name, conf, seed, region))
-            team_id += 1
+    rows_to_insert = []
+    for region in config.REGIONS:
+        for seed in range(1, 17):
+            key = (region, seed)
+            for team_row in teams_by_region_seed.get(key, []):
+                is_ff = 1 if key in first_four_keys else 0
+                rows_to_insert.append((
+                    team_id,
+                    team_row["team"],
+                    int(team_row["espn_id"]),
+                    seed,
+                    region,
+                    is_ff,
+                ))
+                team_id += 1
+
     conn.executemany(
-        "INSERT OR IGNORE INTO teams (team_id, team_name, conference, seed, region) VALUES (?, ?, ?, ?, ?)",
-        teams,
+        "INSERT OR IGNORE INTO teams "
+        "(team_id, team_name, espn_id, seed, region, is_first_four) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        rows_to_insert,
     )
     conn.commit()
 
 
-def _seed_to_team_id(region_offset: int, seed: int) -> int:
-    """Map a seed to its team_id within a region. Seeds are stored at index (seed-1)."""
-    return region_offset + seed
-
-
 def load_bracket(conn: sqlite3.Connection) -> None:
-    """Insert the 63-game bracket structure.
+    """Build the tournament bracket: First Four (round 0) + 63 main games.
 
-    Round 1: slot_a/slot_b are team_ids.
+    Round 0: slot_a/slot_b are team_ids of play-in teams.
+    Round 1: slot_a/slot_b are team_ids OR First Four game_ids.
     Rounds 2-6: slot_a/slot_b are game_ids from the previous round.
     """
     games = []
-    game_id = 1
-    regions = list(TEAMS_BY_REGION.keys())
+    game_id = _GAME_ID_START
+
+    # -- Round 0: First Four play-in games --
+    # Find pairs of teams that share the same (region, seed) with is_first_four=1
+    ff_rows = conn.execute(
+        "SELECT team_id, seed, region FROM teams WHERE is_first_four = 1 "
+        "ORDER BY region, seed, team_id"
+    ).fetchall()
+
+    # Group into pairs
+    ff_pairs = defaultdict(list)
+    for row in ff_rows:
+        ff_pairs[(row["region"], row["seed"])].append(row["team_id"])
+
+    first_four_game_ids = {}  # (region, seed) -> game_id
+    for (region, seed), team_ids in ff_pairs.items():
+        if len(team_ids) == 2:
+            games.append((game_id, 0, region, team_ids[0], team_ids[1]))
+            first_four_game_ids[(region, seed)] = game_id
+            game_id += 1
+
+    # -- Build lookup: (region, seed) -> team_id for non-First-Four teams --
+    non_ff_rows = conn.execute(
+        "SELECT team_id, seed, region FROM teams WHERE is_first_four = 0 "
+        "ORDER BY region, seed"
+    ).fetchall()
+
+    seed_to_team = {}  # (region, seed) -> team_id
+    for row in non_ff_rows:
+        seed_to_team[(row["region"], row["seed"])] = row["team_id"]
 
     # -- Round 1: 8 games per region = 32 games --
     round1_game_ids = {}  # (region_index, pair_index) -> game_id
-    for r_idx, region in enumerate(regions):
-        region_offset = r_idx * 16  # team_ids: 1-16, 17-32, 33-48, 49-64
+    for r_idx, region in enumerate(config.REGIONS):
         for p_idx, (seed_a, seed_b) in enumerate(ROUND1_SEED_PAIRS):
-            team_a_id = region_offset + seed_a
-            team_b_id = region_offset + seed_b
-            games.append((game_id, 1, region, team_a_id, team_b_id))
+            # Resolve each seed to either a team_id or a First Four game_id
+            key_a = (region, seed_a)
+            key_b = (region, seed_b)
+
+            slot_a = first_four_game_ids.get(key_a, seed_to_team.get(key_a))
+            slot_b = first_four_game_ids.get(key_b, seed_to_team.get(key_b))
+
+            if slot_a is None or slot_b is None:
+                raise ValueError(
+                    f"Cannot resolve bracket slot for {region} seeds {seed_a} vs {seed_b}"
+                )
+
+            games.append((game_id, 1, region, slot_a, slot_b))
             round1_game_ids[(r_idx, p_idx)] = game_id
             game_id += 1
 
-    # -- Round 2: winners of adjacent round-1 games play each other --
-    # Pairs: (game 0 vs game 1), (game 2 vs game 3), (game 4 vs game 5), (game 6 vs game 7)
+    # -- Round 2: winners of adjacent round-1 games --
     round2_game_ids = {}
-    for r_idx, region in enumerate(regions):
+    for r_idx, region in enumerate(config.REGIONS):
         for p_idx in range(4):
             slot_a = round1_game_ids[(r_idx, p_idx * 2)]
             slot_b = round1_game_ids[(r_idx, p_idx * 2 + 1)]
@@ -134,9 +126,9 @@ def load_bracket(conn: sqlite3.Connection) -> None:
             round2_game_ids[(r_idx, p_idx)] = game_id
             game_id += 1
 
-    # -- Round 3 (Sweet 16): winners of adjacent round-2 games --
+    # -- Round 3 (Sweet 16) --
     round3_game_ids = {}
-    for r_idx, region in enumerate(regions):
+    for r_idx, region in enumerate(config.REGIONS):
         for p_idx in range(2):
             slot_a = round2_game_ids[(r_idx, p_idx * 2)]
             slot_b = round2_game_ids[(r_idx, p_idx * 2 + 1)]
@@ -144,9 +136,9 @@ def load_bracket(conn: sqlite3.Connection) -> None:
             round3_game_ids[(r_idx, p_idx)] = game_id
             game_id += 1
 
-    # -- Round 4 (Elite 8): winners of the two Sweet 16 games per region --
+    # -- Round 4 (Elite 8) --
     round4_game_ids = {}
-    for r_idx, region in enumerate(regions):
+    for r_idx, region in enumerate(config.REGIONS):
         slot_a = round3_game_ids[(r_idx, 0)]
         slot_b = round3_game_ids[(r_idx, 1)]
         games.append((game_id, 4, region, slot_a, slot_b))
@@ -154,9 +146,9 @@ def load_bracket(conn: sqlite3.Connection) -> None:
         game_id += 1
 
     # -- Round 5 (Final Four): East vs West, South vs Midwest --
-    ff_pairs = [(0, 1), (2, 3)]  # region index pairs
+    ff_matchups = [(0, 1), (2, 3)]
     round5_game_ids = {}
-    for ff_idx, (r_a, r_b) in enumerate(ff_pairs):
+    for ff_idx, (r_a, r_b) in enumerate(ff_matchups):
         slot_a = round4_game_ids[r_a]
         slot_b = round4_game_ids[r_b]
         games.append((game_id, 5, None, slot_a, slot_b))
@@ -167,7 +159,8 @@ def load_bracket(conn: sqlite3.Connection) -> None:
     games.append((game_id, 6, None, round5_game_ids[0], round5_game_ids[1]))
 
     conn.executemany(
-        "INSERT OR IGNORE INTO tournament_bracket (game_id, round, region, slot_a, slot_b) VALUES (?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO tournament_bracket "
+        "(game_id, round, region, slot_a, slot_b) VALUES (?, ?, ?, ?, ?)",
         games,
     )
     conn.commit()
