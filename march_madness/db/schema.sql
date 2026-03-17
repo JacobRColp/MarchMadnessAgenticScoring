@@ -1,21 +1,29 @@
 -- March Madness Bracket Builder — Database Schema (SQLite)
 
 CREATE TABLE IF NOT EXISTS teams (
-    team_id     INTEGER PRIMARY KEY,
-    team_name   TEXT    NOT NULL,
-    conference  TEXT,
-    seed        INTEGER NOT NULL,
-    region      TEXT    NOT NULL
+    team_id       INTEGER PRIMARY KEY,
+    team_name     TEXT    NOT NULL,
+    espn_id       INTEGER NOT NULL,
+    seed          INTEGER NOT NULL,
+    region        TEXT    NOT NULL,
+    is_first_four INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS team_season_stats (
     team_id         INTEGER NOT NULL,
     season          INTEGER NOT NULL,
-    adj_eff_off     REAL,
-    adj_eff_def     REAL,
-    adj_tempo       REAL,
+    games           INTEGER,
+    avg_pts         REAL,
+    fg_pct          REAL,
+    three_pt_pct    REAL,
+    ft_pct          REAL,
+    avg_reb         REAL,
+    avg_ast         REAL,
+    avg_to          REAL,
+    avg_stl         REAL,
+    avg_blk         REAL,
+    opp_avg_pts     REAL,
     win_pct         REAL,
-    sos             REAL,
     PRIMARY KEY (team_id, season),
     FOREIGN KEY (team_id) REFERENCES teams(team_id)
 );
@@ -24,8 +32,9 @@ CREATE TABLE IF NOT EXISTS team_recent_stats (
     team_id             INTEGER NOT NULL,
     season              INTEGER NOT NULL,
     last10_win_pct      REAL,
-    conf_tourney_result TEXT,
     scoring_trend       TEXT,
+    recent_fg_pct       REAL,
+    recent_three_pt_pct REAL,
     PRIMARY KEY (team_id, season),
     FOREIGN KEY (team_id) REFERENCES teams(team_id)
 );

@@ -36,6 +36,11 @@ def get_recent_stats(conn: sqlite3.Connection, team_id: int, season: int) -> dic
     return dict(row) if row else None
 
 
+def get_team_by_espn_id(conn: sqlite3.Connection, espn_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM teams WHERE espn_id = ?", (espn_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def get_seed_matchup(conn: sqlite3.Connection, high_seed: int, low_seed: int) -> dict | None:
     row = conn.execute(
         "SELECT * FROM seed_matchup_history WHERE high_seed = ? AND low_seed = ?",

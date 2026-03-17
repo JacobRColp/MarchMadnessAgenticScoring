@@ -12,15 +12,18 @@ def simulate_tournament(
     experts: list,
     weights: list[float],
 ) -> dict:
-    """Run the full 6-round tournament simulation.
+    """Run the full tournament simulation (First Four + 6 rounds).
 
     Returns a dict mapping game_id -> winning team dict.
     """
     winners = {}  # game_id -> team dict
 
-    for round_num in range(1, 7):
+    for round_num in range(0, 7):
         matchups = queries.get_round_matchups(conn, round_num)
-        round_name = ROUND_NAMES[round_num]
+        if not matchups:
+            continue
+
+        round_name = ROUND_NAMES.get(round_num, f"Round {round_num}")
         print(f"\n{'=' * 50}")
         print(f"  {round_name}")
         print(f"{'=' * 50}")
@@ -30,13 +33,18 @@ def simulate_tournament(
             slot_a = game["slot_a"]
             slot_b = game["slot_b"]
 
-            # Resolve slots to team dicts
-            if round_num == 1:
-                team_a = queries.get_team(conn, slot_a)
-                team_b = queries.get_team(conn, slot_b)
-            else:
+            # Resolve slots to team dicts.
+            # Check winners first (handles First Four game_ids in Round 1
+            # and later-round game_ids). Fall back to direct team lookup.
+            if slot_a in winners:
                 team_a = winners[slot_a]
+            else:
+                team_a = queries.get_team(conn, slot_a)
+
+            if slot_b in winners:
                 team_b = winners[slot_b]
+            else:
+                team_b = queries.get_team(conn, slot_b)
 
             # Run all experts
             results = [expert(team_a, team_b, conn) for expert in experts]

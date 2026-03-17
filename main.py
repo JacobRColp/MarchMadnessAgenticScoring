@@ -14,6 +14,7 @@ from march_madness.db import queries
 from march_madness.data.load_teams import load_teams, load_bracket
 from march_madness.data.load_stats import load_season_stats, load_recent_stats
 from march_madness.data.load_history import load_seed_matchup_history
+from march_madness.data.compute_aggregates import compute_aggregates
 from march_madness.experts import EXPERTS
 from march_madness.engine.bracket_engine import simulate_tournament
 
@@ -32,11 +33,20 @@ def main():
 
     conn = queries.init_db(config.DB_PATH)
 
-    # Load all data
+    # Load teams and bracket from CSV
     load_teams(conn)
     load_bracket(conn)
-    load_season_stats(conn, config.SEASON)
-    load_recent_stats(conn, config.SEASON)
+
+    # Compute derived stats from boxscores (expensive — do once)
+    team_espn_ids = {
+        row["espn_id"]
+        for row in conn.execute("SELECT espn_id FROM teams").fetchall()
+    }
+    aggregates = compute_aggregates(str(config.RAW_BOXSCORES_CSV), team_espn_ids)
+
+    # Load stats using CSV + computed aggregates
+    load_season_stats(conn, config.SEASON, aggregates)
+    load_recent_stats(conn, config.SEASON, aggregates)
     load_seed_matchup_history(conn)
 
     # Build weights list (same order as EXPERTS)

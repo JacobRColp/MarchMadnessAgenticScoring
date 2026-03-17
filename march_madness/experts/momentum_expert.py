@@ -1,14 +1,7 @@
-"""Momentum expert — weights recent performance and conference tournament results."""
+"""Momentum expert — weights recent performance and shooting trends."""
 
 from march_madness.db import queries
 from march_madness.config import SEASON
-
-CONF_TOURNEY_BONUS = {
-    "champion": 0.15,
-    "finalist": 0.10,
-    "semis": 0.05,
-    "early_exit": 0.0,
-}
 
 TREND_BONUS = {
     "improving": 0.05,
@@ -20,8 +13,13 @@ TREND_BONUS = {
 def _momentum_score(stats: dict) -> float:
     """Compute a raw momentum score (0-1 range) for one team."""
     score = stats["last10_win_pct"]
-    score += CONF_TOURNEY_BONUS.get(stats["conf_tourney_result"], 0.0)
     score += TREND_BONUS.get(stats["scoring_trend"], 0.0)
+
+    # Small bonus for recent hot shooting (FG% above 0.44 baseline)
+    recent_fg = stats.get("recent_fg_pct") or 0.0
+    shoot_bonus = (recent_fg - 0.44) * 0.5
+    score += max(-0.05, min(0.10, shoot_bonus))
+
     return max(0.0, min(1.0, score))
 
 
