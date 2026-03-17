@@ -12,6 +12,7 @@ def simulate_tournament(
     experts: list,
     weights: list[float],
     stochastic: bool = False,
+    quiet: bool = False,
 ) -> dict:
     """Run the full tournament simulation (First Four + 6 rounds).
 
@@ -25,9 +26,10 @@ def simulate_tournament(
             continue
 
         round_name = ROUND_NAMES.get(round_num, f"Round {round_num}")
-        print(f"\n{'=' * 50}")
-        print(f"  {round_name}")
-        print(f"{'=' * 50}")
+        if not quiet:
+            print(f"\n{'=' * 50}")
+            print(f"  {round_name}")
+            print(f"{'=' * 50}")
 
         for game in matchups:
             game_id = game["game_id"]
@@ -59,11 +61,12 @@ def simulate_tournament(
             winners[game_id] = winner
 
             # Display
-            region = f" [{game['region']}]" if game["region"] else ""
-            print(
-                f"  ({team_a['seed']}) {team_a['team_name']:<20s} vs "
-                f"({team_b['seed']}) {team_b['team_name']:>20s}"
-                f"  ->  {winner['team_name']}{region}"
-            )
+            if not quiet:
+                region = f" [{game['region']}]" if game["region"] else ""
+                print(
+                    f"  ({team_a['seed']}) {team_a['team_name']:<20s} vs "
+                    f"({team_b['seed']}) {team_b['team_name']:>20s}"
+                    f"  ->  {winner['team_name']}{region}"
+                )
 
     return winners

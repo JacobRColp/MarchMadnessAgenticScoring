@@ -27,6 +27,13 @@ def main():
         action="store_true",
         help="Use Monte Carlo aggregator (sample winners by probability)",
     )
+    parser.add_argument(
+        "--ensemble",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Run N stochastic iterations and pick winners by plurality",
+    )
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -64,13 +71,20 @@ def main():
 
     print("March Madness Bracket Builder")
     print(f"Season: {config.SEASON}")
-    if args.stochastic:
+    if args.ensemble > 0:
+        print(f"Ensemble mode: {args.ensemble} stochastic iterations")
+    elif args.stochastic:
         print("Aggregator: Monte Carlo (stochastic)")
     if args.seed is not None:
         print(f"Random seed: {args.seed}")
 
     # Simulate
-    winners = simulate_tournament(conn, EXPERTS, weights, stochastic=args.stochastic)
+    if args.ensemble > 0:
+        from march_madness.engine.ensemble import run_ensemble
+        result = run_ensemble(conn, EXPERTS, weights, iterations=args.ensemble)
+        winners = result["consensus_winners"]
+    else:
+        winners = simulate_tournament(conn, EXPERTS, weights, stochastic=args.stochastic)
 
     # The last game (highest game_id) determines the champion
     champion = winners[max(winners)]
