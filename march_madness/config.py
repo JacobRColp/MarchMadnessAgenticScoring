@@ -12,10 +12,10 @@ RAW_BOXSCORES_CSV = _PROJECT_ROOT / "notebooks" / "march_madness_2026_raw_boxsco
 
 # Expert weights (must sum to 1.0)
 EXPERT_WEIGHTS = {
-    "seed": 0.15,
+    "seed": 0.25,
     "efficiency": 0.40,
-    "momentum": 0.20,
-    "chaos": 0.25,
+    "momentum": 0.25,
+    "chaos": 0.10,
 }
 
 ROUND_NAMES = {
