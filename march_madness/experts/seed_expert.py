@@ -7,7 +7,7 @@ def seed_expert(team_a: dict, team_b: dict, db_conn) -> dict:
     """Return confidence scores based on historical seed matchup data."""
     seed_a = team_a["seed"]
     seed_b = team_b["seed"]
-
+#If the seeds are the same - then 50/50 chance for each team
     if seed_a == seed_b:
         return {"team_a": 0.5, "team_b": 0.5}
 
@@ -18,11 +18,12 @@ def seed_expert(team_a: dict, team_b: dict, db_conn) -> dict:
     else:
         high_seed, low_seed = seed_b, seed_a
         a_is_high = False
-
+#If the matchup is not found in the database, then return 50/50 chance for each team
     matchup = queries.get_seed_matchup(db_conn, high_seed, low_seed)
     if matchup is None:
         return {"team_a": 0.5, "team_b": 0.5}
-
+#Handling for ordering of teams in the matchup - if team_a is the higher seed,
+# then it gets the high_pct, otherwise it gets 1 - high_pct
     high_pct = matchup["high_seed_win_pct"]
     if a_is_high:
         return {"team_a": high_pct, "team_b": 1.0 - high_pct}
