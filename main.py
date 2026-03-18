@@ -3,6 +3,7 @@
 Usage:
     python main.py              # random bracket (different each run)
     python main.py --seed 42    # reproducible bracket
+    python main.py --womens     # women's bracket
 """
 
 import argparse
@@ -28,6 +29,11 @@ def main():
         help="Use Monte Carlo aggregator (sample winners by probability)",
     )
     parser.add_argument(
+        "--womens",
+        action="store_true",
+        help="Use the women's bracket instead of the men's",
+    )
+    parser.add_argument(
         "--ensemble",
         type=int,
         default=0,
@@ -35,6 +41,9 @@ def main():
         help="Run N stochastic iterations and pick winners by plurality",
     )
     args = parser.parse_args()
+
+    if args.womens:
+        config.set_womens()
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -69,7 +78,8 @@ def main():
         config.EXPERT_WEIGHTS["chaos"],
     ]
 
-    print("March Madness Bracket Builder")
+    bracket_label = "Women's " if args.womens else ""
+    print(f"{bracket_label}March Madness Bracket Builder")
     print(f"Season: {config.SEASON}")
     if args.ensemble > 0:
         print(f"Ensemble mode: {args.ensemble} stochastic iterations")
